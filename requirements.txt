@@ -1,0 +1,4 @@
+easyocr
+mss
+pillow
+pytest

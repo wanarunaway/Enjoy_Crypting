@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chest History Dashboard</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --page:            #f9f9f7;
+    --surface-1:       #fcfcfb;
+    --text-primary:    #0b0b0b;
+    --text-secondary:  #52514e;
+    --text-muted:      #898781;
+    --gridline:        #e1e0d9;
+    --baseline:        #c3c2b7;
+    --border:          rgba(11,11,11,0.10);
+    --series-1:        #2a78d6;
+    --series-1-hover:  #1c5cab;
+    --row-hover:       rgba(11,11,11,0.035);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --page:            #0d0d0d;
+      --surface-1:       #1a1a19;
+      --text-primary:    #ffffff;
+      --text-secondary:  #c3c2b7;
+      --text-muted:      #898781;
+      --gridline:        #2c2c2a;
+      --baseline:        #383835;
+      --border:          rgba(255,255,255,0.10);
+      --series-1:        #3987e5;
+      --series-1-hover:  #5598e7;
+      --row-hover:       rgba(255,255,255,0.045);
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --page:            #0d0d0d;
+    --surface-1:       #1a1a19;
+    --text-primary:    #ffffff;
+    --text-secondary:  #c3c2b7;
+    --text-muted:      #898781;
+    --gridline:        #2c2c2a;
+    --baseline:        #383835;
+    --border:          rgba(255,255,255,0.10);
+    --series-1:        #3987e5;
+    --series-1-hover:  #5598e7;
+    --row-hover:       rgba(255,255,255,0.045);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page);
+    color: var(--text-primary);
+  }
+  .page-content { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; }
+
+  .page-header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  .page-header h1 { font-size: 22px; font-weight: 650; margin: 0; }
+  .page-header .meta { color: var(--text-muted); font-size: 13px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+
+  button.theme-toggle {
+    font: inherit; font-size: 13px; color: var(--text-secondary);
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 12px; cursor: pointer;
+  }
+  button.theme-toggle:hover { color: var(--text-primary); }
+
+  .empty-state { padding: 64px 20px; text-align: center; color: var(--text-secondary); }
+  .empty-state .hero { font-size: 15px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat-tile {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .stat-tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+  .stat-tile .value { font-size: 30px; font-weight: 650; line-height: 1.1; }
+  .stat-tile .subvalue { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px 14px;
+  }
+  .card h2 { font-size: 14px; font-weight: 620; margin: 0 0 12px; }
+  .card .empty-note { color: var(--text-muted); font-size: 13px; margin: 8px 0; }
+
+  .bar-label { font-size: 12px; fill: var(--text-secondary); }
+  .bar-value { font-size: 12px; fill: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .bar-fill { fill: var(--series-1); cursor: pointer; transition: fill 120ms; }
+  .bar-fill:hover, .bar-fill.hover, g.bar-group:focus .bar-fill { fill: var(--series-1-hover); }
+  g.bar-group { outline: none; }
+  g.bar-group:focus .bar-hit { stroke: var(--series-1); stroke-width: 2; }
+  .bar-hit { fill: transparent; }
+  .axis-line { stroke: var(--baseline); stroke-width: 1; }
+  .col-label { font-size: 11px; fill: var(--text-muted); }
+
+  .tooltip {
+    position: fixed; pointer-events: none; z-index: 50;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; font-size: 12px; color: var(--text-secondary);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+    opacity: 0; transform: translateY(2px); transition: opacity 100ms, transform 100ms;
+    max-width: 240px;
+  }
+  .tooltip.show { opacity: 1; transform: translateY(0); }
+  .tooltip .t-value { color: var(--text-primary); font-weight: 650; font-variant-numeric: tabular-nums; }
+
+  .table-section { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 20px; }
+  .table-section h2 { font-size: 14px; font-weight: 620; margin: 0 0 12px; }
+  .filter-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .filter-row input[type="search"] {
+    font: inherit; font-size: 13px; padding: 7px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--page); color: var(--text-primary);
+    min-width: 220px;
+  }
+  .filter-row .count-note { font-size: 12px; color: var(--text-muted); }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.data-table th, table.data-table td {
+    text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--gridline);
+    font-variant-numeric: tabular-nums;
+  }
+  table.data-table th {
+    color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.03em; cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  table.data-table th:hover { color: var(--text-secondary); }
+  table.data-table th .arrow { opacity: 0.5; margin-left: 4px; }
+  table.data-table tbody tr:hover { background: var(--row-hover); }
+  .table-scroll { overflow-x: auto; }
+  .table-scroll.raw { max-height: 420px; overflow-y: auto; }
+</style>
+</head>
+<body class="viz-root">
+<div class="page-content">
+  <div class="page-header">
+    <div>
+      <h1>Chest History Dashboard</h1>
+      <div class="meta">Generated __GENERATED_AT__ &middot; from chestlog.db</div>
+    </div>
+    <div class="header-right">
+      <button class="theme-toggle" id="themeToggle" type="button">Toggle theme</button>
+    </div>
+  </div>
+
+  <div id="content"></div>
+</div>
+
+<div class="tooltip" id="tooltip" role="tooltip"></div>
+
+<script>
+const DATA = __DATA_JSON__;
+
+function fmt(n) { return n.toLocaleString(); }
+
+function el(tag, attrs, children) {
+  const e = document.createElement(tag);
+  for (const k in (attrs || {})) e.setAttribute(k, attrs[k]);
+  (children || []).forEach(c => e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c));
+  return e;
+}
+
+// ---- tooltip -----------------------------------------------------------
+const tooltipEl = document.getElementById('tooltip');
+function showTooltip(target, label, value) {
+  tooltipEl.innerHTML = '';
+  const valueSpan = el('span', { class: 't-value' }, [String(value)]);
+  tooltipEl.appendChild(valueSpan);
+  tooltipEl.appendChild(document.createTextNode('  ' + label));
+  tooltipEl.classList.add('show');
+  positionTooltip(target);
+}
+function positionTooltip(target) {
+  const r = target.getBoundingClientRect();
+  let x = r.left + r.width / 2;
+  let y = r.top - 10;
+  tooltipEl.style.left = Math.max(8, Math.min(window.innerWidth - 250, x)) + 'px';
+  tooltipEl.style.top = Math.max(8, y) + 'px';
+  tooltipEl.style.transform = 'translate(-50%, -100%)';
+}
+function hideTooltip() { tooltipEl.classList.remove('show'); }
+
+// ---- SVG path helpers ---------------------------------------------------
+function roundedBarPath(x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, h / 2, w));
+  if (w <= 0) return '';
+  if (w <= r) return `M${x},${y} h${w} v${h} h${-w} Z`;
+  return `M${x},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h - r} Q${x + w},${y + h} ${x + w - r},${y + h} H${x} Z`;
+}
+function roundedColPath(x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h));
+  if (h <= 0) return '';
+  if (h <= r) return `M${x},${y} h${w} v${h} h${-w} Z`;
+  return `M${x + r},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h} H${x} V${y + r} Q${x},${y} ${x + r},${y} Z`;
+}
+
+// ---- horizontal ranked bar chart ----------------------------------------
+function renderHBarChart(containerId, data) {
+  const container = document.getElementById(containerId);
+  if (!data || data.length === 0) {
+    container.appendChild(el('p', { class: 'empty-note' }, ['No data yet.']));
+    return;
+  }
+  const barH = 18, gap = 8, labelW = 118, valueW = 46, padL = 4, padR = 4, padTB = 6;
+  const plotW = 190;
+  const maxVal = Math.max(...data.map(d => d.value));
+  const rowH = barH + gap;
+  const totalH = data.length * rowH - gap + padTB * 2;
+  const totalW = padL + labelW + plotW + valueW + padR;
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', totalH);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Ranked bar chart');
+
+  data.forEach((d, i) => {
+    const y = padTB + i * rowH;
+    const barX = padL + labelW;
+    const w = maxVal > 0 ? (d.value / maxVal) * plotW : 0;
+
+    const g = document.createElementNS(svg.namespaceURI, 'g');
+    g.setAttribute('class', 'bar-group');
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('role', 'img');
+    g.setAttribute('aria-label', `${d.label}: ${d.value}`);
+
+    const label = document.createElementNS(svg.namespaceURI, 'text');
+    label.setAttribute('class', 'bar-label');
+    label.setAttribute('x', padL);
+    label.setAttribute('y', y + barH * 0.72);
+    label.textContent = d.label.length > 16 ? d.label.slice(0, 15) + '…' : d.label;
+    const titleEl = document.createElementNS(svg.namespaceURI, 'title');
+    titleEl.textContent = d.label;
+    label.appendChild(titleEl);
+    g.appendChild(label);
+
+    const path = document.createElementNS(svg.namespaceURI, 'path');
+    path.setAttribute('class', 'bar-fill');
+    path.setAttribute('d', roundedBarPath(barX, y, Math.max(w, w > 0 ? 3 : 0), barH, 4));
+    g.appendChild(path);
+
+    const valueText = document.createElementNS(svg.namespaceURI, 'text');
+    valueText.setAttribute('class', 'bar-value');
+    valueText.setAttribute('x', barX + Math.max(w, 3) + 8);
+    valueText.setAttribute('y', y + barH * 0.72);
+    valueText.textContent = fmt(d.value);
+    g.appendChild(valueText);
+
+    const hit = document.createElementNS(svg.namespaceURI, 'rect');
+    hit.setAttribute('class', 'bar-hit');
+    hit.setAttribute('x', 0);
+    hit.setAttribute('y', y - 1);
+    hit.setAttribute('width', totalW);
+    hit.setAttribute('height', barH + 2);
+    hit.setAttribute('rx', 4);
+    g.appendChild(hit);
+
+    g.addEventListener('pointerenter', () => showTooltip(hit, d.label, fmt(d.value)));
+    g.addEventListener('pointermove', () => positionTooltip(hit));
+    g.addEventListener('pointerleave', hideTooltip);
+    g.addEventListener('focus', () => showTooltip(hit, d.label, fmt(d.value)));
+    g.addEventListener('blur', hideTooltip);
+
+    svg.appendChild(g);
+  });
+
+  container.appendChild(svg);
+}
+
+// ---- vertical activity-over-time chart -----------------------------------
+function renderActivityChart(containerId, data) {
+  const container = document.getElementById(containerId);
+  if (!data || data.length === 0) {
+    container.appendChild(el('p', { class: 'empty-note' }, ['No data yet.']));
+    return;
+  }
+  const shown = data.slice(-30);
+  const note = data.length > 30 ? ` (last 30 of ${data.length} days shown)` : '';
+
+  const colW = 26, gap = 10, padL = 8, padR = 8, padTop = 22, axisH = 26;
+  const plotH = 120;
+  const totalW = padL + shown.length * (colW + gap) - gap + padR;
+  const totalH = padTop + plotH + axisH;
+  const maxVal = Math.max(...shown.map(d => d.value), 1);
+
+  if (note) container.appendChild(el('p', { class: 'empty-note' }, [note.trim()]));
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${totalH}`);
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', totalH);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Chests captured per day');
+
+  const baseline = document.createElementNS(svg.namespaceURI, 'line');
+  baseline.setAttribute('class', 'axis-line');
+  baseline.setAttribute('x1', 0);
+  baseline.setAttribute('x2', totalW);
+  baseline.setAttribute('y1', padTop + plotH);
+  baseline.setAttribute('y2', padTop + plotH);
+  svg.appendChild(baseline);
+
+  shown.forEach((d, i) => {
+    const x = padL + i * (colW + gap);
+    const h = (d.value / maxVal) * (plotH - 18);
+    const y = padTop + plotH - h;
+
+    const g = document.createElementNS(svg.namespaceURI, 'g');
+    g.setAttribute('class', 'bar-group');
+    g.setAttribute('tabindex', '0');
+    g.setAttribute('role', 'img');
+    g.setAttribute('aria-label', `${d.label}: ${d.value}`);
+
+    const valueText = document.createElementNS(svg.namespaceURI, 'text');
+    valueText.setAttribute('class', 'bar-value');
+    valueText.setAttribute('x', x + colW / 2);
+    valueText.setAttribute('y', y - 6);
+    valueText.setAttribute('text-anchor', 'middle');
+    valueText.textContent = fmt(d.value);
+    g.appendChild(valueText);
+
+    const path = document.createElementNS(svg.namespaceURI, 'path');
+    path.setAttribute('class', 'bar-fill');
+    path.setAttribute('d', roundedColPath(x, y, colW, Math.max(h, 2), 4));
+    g.appendChild(path);
+
+    const dayLabel = document.createElementNS(svg.namespaceURI, 'text');
+    dayLabel.setAttribute('class', 'col-label');
+    dayLabel.setAttribute('x', x + colW / 2);
+    dayLabel.setAttribute('y', padTop + plotH + 16);
+    dayLabel.setAttribute('text-anchor', 'middle');
+    dayLabel.textContent = d.label.slice(5); // MM-DD
+    g.appendChild(dayLabel);
+
+    const hit = document.createElementNS(svg.namespaceURI, 'rect');
+    hit.setAttribute('class', 'bar-hit');
+    hit.setAttribute('x', x - 3);
+    hit.setAttribute('y', padTop);
+    hit.setAttribute('width', colW + 6);
+    hit.setAttribute('height', plotH);
+    hit.setAttribute('rx', 4);
+    g.appendChild(hit);
+
+    g.addEventListener('pointerenter', () => showTooltip(hit, d.label, fmt(d.value)));
+    g.addEventListener('pointermove', () => positionTooltip(hit));
+    g.addEventListener('pointerleave', hideTooltip);
+    g.addEventListener('focus', () => showTooltip(hit, d.label, fmt(d.value)));
+    g.addEventListener('blur', hideTooltip);
+
+    svg.appendChild(g);
+  });
+
+  container.appendChild(svg);
+}
+
+// ---- sessions table -------------------------------------------------------
+function renderSessionsTable(containerId, sessions) {
+  const container = document.getElementById(containerId);
+  if (!sessions || sessions.length === 0) {
+    container.appendChild(el('p', { class: 'empty-note' }, ['No sessions yet.']));
+    return;
+  }
+  const table = el('table', { class: 'data-table' });
+  const thead = el('thead', {}, [el('tr', {}, [
+    el('th', {}, ['Session']), el('th', {}, ['Rows']), el('th', {}, ['Started']), el('th', {}, ['Ended']),
+  ])]);
+  const tbody = el('tbody');
+  sessions.forEach(s => {
+    tbody.appendChild(el('tr', {}, [
+      el('td', {}, [s.session]),
+      el('td', {}, [fmt(s.count)]),
+      el('td', {}, [s.started || '']),
+      el('td', {}, [s.ended || '']),
+    ]));
+  });
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  container.appendChild(el('div', { class: 'table-scroll' }, [table]));
+}
+
+// ---- raw data table: searchable + sortable ---------------------------------
+function renderRawSection(containerId, rows) {
+  const container = document.getElementById(containerId);
+  if (!rows || rows.length === 0) {
+    container.appendChild(el('p', { class: 'empty-note' }, ['No rows yet.']));
+    return;
+  }
+
+  const columns = [
+    { key: 'captured_at', label: 'Time' },
+    { key: 'player', label: 'Player' },
+    { key: 'chest_type', label: 'Chest' },
+    { key: 'level', label: 'Level' },
+    { key: 'session', label: 'Session' },
+  ];
+  let sortKey = 'captured_at';
+  let sortDir = -1;
+  let filterText = '';
+
+  const filterRow = el('div', { class: 'filter-row' });
+  const search = el('input', { type: 'search', placeholder: 'Search player, chest, or level…' });
+  const countNote = el('span', { class: 'count-note' });
+  filterRow.appendChild(search);
+  filterRow.appendChild(countNote);
+  container.appendChild(filterRow);
+
+  const tableScroll = el('div', { class: 'table-scroll raw' });
+  container.appendChild(tableScroll);
+
+  function draw() {
+    tableScroll.innerHTML = '';
+    const q = filterText.trim().toLowerCase();
+    let filtered = !q ? rows : rows.filter(r =>
+      (r.player || '').toLowerCase().includes(q) ||
+      (r.chest_type || '').toLowerCase().includes(q) ||
+      (r.level || '').toLowerCase().includes(q)
+    );
+    filtered = filtered.slice().sort((a, b) => {
+      const av = (a[sortKey] || ''), bv = (b[sortKey] || '');
+      return av < bv ? -1 * sortDir : av > bv ? 1 * sortDir : 0;
+    });
+    countNote.textContent = `${fmt(filtered.length)} of ${fmt(rows.length)} rows`;
+
+    const table = el('table', { class: 'data-table' });
+    const headerRow = el('tr');
+    columns.forEach(c => {
+      const arrow = c.key === sortKey ? (sortDir === 1 ? '↑' : '↓') : '';
+      const th = el('th', {}, [c.label, el('span', { class: 'arrow' }, [arrow])]);
+      th.addEventListener('click', () => {
+        if (sortKey === c.key) { sortDir *= -1; } else { sortKey = c.key; sortDir = 1; }
+        draw();
+      });
+      headerRow.appendChild(th);
+    });
+    const thead = el('thead', {}, [headerRow]);
+    const tbody = el('tbody');
+    filtered.forEach(r => {
+      tbody.appendChild(el('tr', {}, [
+        el('td', {}, [r.captured_at || '']),
+        el('td', {}, [r.player || '']),
+        el('td', {}, [r.chest_type || '']),
+        el('td', {}, [r.level || '—']),
+        el('td', {}, [r.session || '']),
+      ]));
+    });
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    tableScroll.appendChild(table);
+  }
+
+  search.addEventListener('input', () => { filterText = search.value; draw(); });
+  draw();
+}
+
+// ---- page assembly ---------------------------------------------------------
+function buildPage() {
+  const content = document.getElementById('content');
+
+  if (!DATA.total) {
+    content.appendChild(el('div', { class: 'empty-state' }, [
+      el('p', { class: 'hero' }, ['No chests logged yet.']),
+      el('p', {}, ['Run a scan in the app and click Save to Database, then regenerate this dashboard.']),
+    ]));
+    return;
+  }
+
+  const kpiRow = el('div', { class: 'kpi-row' });
+  const tiles = [
+    { label: 'Total chests logged', value: fmt(DATA.total) },
+    { label: 'Unique players', value: fmt(DATA.unique_players) },
+    { label: 'Unique chest types', value: fmt(DATA.unique_types) },
+    { label: 'Date range', value: (DATA.date_start || '').slice(0, 10), sub: 'through ' + (DATA.date_end || '').slice(0, 10) },
+  ];
+  tiles.forEach(t => {
+    const tile = el('div', { class: 'stat-tile' }, [
+      el('div', { class: 'label' }, [t.label]),
+      el('div', { class: 'value' }, [t.value]),
+    ]);
+    if (t.sub) tile.appendChild(el('div', { class: 'subvalue' }, [t.sub]));
+    kpiRow.appendChild(tile);
+  });
+  content.appendChild(kpiRow);
+
+  const chartGrid = el('div', { class: 'chart-grid' });
+  const cardTop = el('div', { class: 'card' }, [el('h2', {}, ['Top contributors']), el('div', { id: 'chartTopPlayers' })]);
+  const cardTypes = el('div', { class: 'card' }, [el('h2', {}, ['Chests by type']), el('div', { id: 'chartTypes' })]);
+  const cardLevels = el('div', { class: 'card' }, [el('h2', {}, ['Chests by source level']), el('div', { id: 'chartLevels' })]);
+  const cardActivity = el('div', { class: 'card' }, [el('h2', {}, ['Activity over time']), el('div', { id: 'chartActivity' })]);
+  chartGrid.appendChild(cardTop);
+  chartGrid.appendChild(cardTypes);
+  chartGrid.appendChild(cardLevels);
+  chartGrid.appendChild(cardActivity);
+  content.appendChild(chartGrid);
+
+  const sessionsSection = el('div', { class: 'table-section' }, [el('h2', {}, ['Scan sessions']), el('div', { id: 'sessionsTable' })]);
+  content.appendChild(sessionsSection);
+
+  const rawSection = el('div', { class: 'table-section' }, [el('h2', {}, ['All rows']), el('div', { id: 'rawSection' })]);
+  content.appendChild(rawSection);
+
+  renderHBarChart('chartTopPlayers', DATA.top_players);
+  renderHBarChart('chartTypes', DATA.top_chest_types);
+  renderHBarChart('chartLevels', DATA.top_levels);
+  renderActivityChart('chartActivity', DATA.activity);
+  renderSessionsTable('sessionsTable', DATA.sessions);
+  renderRawSection('rawSection', DATA.raw);
+}
+
+buildPage();
+
+// ---- theme toggle -----------------------------------------------------------
+(function () {
+  const btn = document.getElementById('themeToggle');
+  const stored = localStorage.getItem('chestlog-theme');
+  if (stored) document.documentElement.setAttribute('data-theme', stored);
+  btn.addEventListener('click', () => {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const current = document.documentElement.getAttribute('data-theme') || (prefersDark ? 'dark' : 'light');
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('chestlog-theme', next);
+  });
+})();
+</script>
+</body>
+</html>

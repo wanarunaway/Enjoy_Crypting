@@ -1,0 +1,12 @@
+# Local data -- never publish real player/chest data via the repo itself.
+# The published snapshot lives only in docs/index.html, committed deliberately.
+chestlog.db
+chestlog_dashboard.html
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Editor / tooling
+.claude/
